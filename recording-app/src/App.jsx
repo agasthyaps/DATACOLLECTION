@@ -27,11 +27,6 @@ function App() {
   const [audioUrl, setAudioUrl] = useState(null) // URL for audio preview
   const [isPlaying, setIsPlaying] = useState(false)
   const audioRef = useRef(null)
-  const [participants] = useState([
-    { id: '1', name: 'Participant A' },
-    { id: '2', name: 'Participant B' },
-    { id: '3', name: 'Participant C' },
-  ])
   const { isAuthenticated, loginWithRedirect, logout, user, isLoading, getAccessTokenSilently } = useAuth0()
 
   // Check if user is admin when they log in
@@ -306,19 +301,14 @@ function App() {
         <div className="rounded-lg bg-white p-6 shadow-lg">
           <h1 className="text-2xl font-bold text-center mb-6">Record Coaching Conversation</h1>
           
-          <select
+          <input
+            type="text"
             value={selectedParticipant}
             onChange={(e) => setSelectedParticipant(e.target.value)}
+            placeholder="Enter teacher identifier"
             className="w-full p-2 mb-6 border rounded-md"
             disabled={isRecording || uploadStatus === 'uploading'}
-          >
-            <option value="">Select Teacher</option>
-            {participants.map(participant => (
-              <option key={participant.id} value={participant.id}>
-                {participant.name}
-              </option>
-            ))}
-          </select>
+          />
 
           {!audioUrl && (
             <button
