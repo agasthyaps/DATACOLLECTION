@@ -1,7 +1,7 @@
 // src/components/AdminDashboard.jsx
 import { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
-import { ArrowLeft, Play, FileText, AlertCircle, CheckCircle, Clock, RefreshCcw } from 'lucide-react';
+import { ArrowLeft, Play, FileText, AlertCircle, CheckCircle, Clock, RefreshCcw, UserPlus } from 'lucide-react';
 import AudioPlayer from './AudioPlayer';
 import TranscriptModal from './TranscriptModal'
 import { apiRequest } from '../utils/api';
