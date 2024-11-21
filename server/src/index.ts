@@ -107,14 +107,6 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   next(error);
 });
 
-// Middleware
-app.use(cors({
-  origin: 'http://localhost:5173',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
-
 app.use(express.json());
 
 app.use((req, res, next) => {
