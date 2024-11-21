@@ -2,12 +2,15 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { auth } from 'express-oauth2-jwt-bearer';
-import { generateUploadUrl } from './s3';
+import { generateUploadUrl, generateTranscriptUploadUrl, generateTranscriptReadUrl } from './s3';
 import dotenv from 'dotenv';
 import path from 'path';
 import { db, dbAsync } from './db';
 import { startTranscription } from './transcription';
 import { dot } from 'node:test/reporters';
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+
 
 dotenv.config();
 
@@ -53,6 +56,17 @@ for (const envVar of requiredEnvVars) {
 }
 
 const app = express();
+
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://your-frontend-url.vercel.app']
+    : 'http://localhost:5173',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 
 // Auth0 middleware configuration
 const checkJwt = auth({
@@ -283,6 +297,263 @@ process.on('SIGINT', () => {
     }
     process.exit(0);
   });
+});
+
+// Middleware to check if user is admin
+async function isAdmin(req: Request, res: Response, next: NextFunction) {
+  try {
+    // Get the user's sub from the token
+    const userSub = req.auth?.payload.sub;
+    console.log('User sub from token:', userSub);
+
+    if (!userSub) {
+      return res.status(401).json({ error: 'No user identifier found' });
+    }
+
+    // Get user info from Auth0 management API
+    const response = await fetch(`${process.env.AUTH0_ISSUER}userinfo`, {
+      headers: {
+        'Authorization': req.headers.authorization || ''
+      }
+    });
+
+    if (!response.ok) {
+      console.error('Failed to get user info:', response.status);
+      return res.status(401).json({ error: 'Failed to get user info' });
+    }
+
+    const userInfo = await response.json();
+    console.log('User info:', userInfo);
+
+    // Now check if this email is in admin_team
+    const admin = await dbAsync.get(
+      'SELECT COUNT(*) as count FROM admin_team WHERE email = ?',
+      [userInfo.email]
+    );
+
+    console.log('Admin check result:', admin);
+
+    if (!admin || admin.count === 0) {
+      return res.status(403).json({ error: 'Not an admin' });
+    }
+
+    next();
+  } catch (error) {
+    console.error('Admin middleware error:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// Get all recordings with related data
+app.get('/api/admin/recordings', checkJwt, isAdmin, async (req: Request, res: Response) => {
+  try {
+    const recordings = await dbAsync.all(`
+      SELECT 
+        r.id,
+        r.recorded_at,
+        r.status as recording_status,
+        r.s3_url,
+        r.user_id,          -- This is the auth0_id
+        p.identifier as participant_identifier,
+        t.status as transcript_status,
+        t.preview_text,
+        t.s3_url as transcript_url,
+        t.confidence,
+        t.error_message
+      FROM recordings r
+      LEFT JOIN participants p ON r.participant_id = p.id
+      LEFT JOIN transcripts t ON r.id = t.recording_id
+      ORDER BY r.recorded_at DESC
+    `);
+
+    // Map the data for the frontend
+    const formattedRecordings = recordings.map(r => ({
+      ...r,
+      researcher_email: r.user_id // For now, just show the auth0_id
+      // Later we can add a users table lookup if needed
+    }));
+
+    console.log('Fetched recordings:', formattedRecordings);
+    res.json({ recordings: formattedRecordings });
+  } catch (error) {
+    console.error('Error fetching recordings:', error);
+    res.status(500).json({ 
+      error: 'Error fetching recordings',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Retry transcription
+app.post('/api/admin/transcripts/:id/retry', checkJwt, isAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const recording = await dbAsync.get(
+      'SELECT * FROM recordings WHERE id = ?',
+      [id]
+    );
+
+    if (!recording) {
+      return res.status(404).json({ error: 'Recording not found' });
+    }
+
+    // Reset transcript status
+    await dbAsync.run(
+      `UPDATE transcripts 
+       SET status = 'pending', error_message = NULL 
+       WHERE recording_id = ?`,
+      [id]
+    );
+
+    // Start new transcription
+    await startTranscription(
+      parseInt(id),
+      recording.s3_url,
+      recording.user_id
+    );
+
+    res.json({ message: 'Transcription retry initiated' });
+  } catch (error) {
+    console.error('Error retrying transcription:', error);
+    res.status(500).json({ error: 'Error retrying transcription' });
+  }
+});
+
+// Update transcript
+app.put('/api/admin/transcripts/:id', checkJwt, isAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { text, metadata } = req.body;
+
+    const recording = await dbAsync.get(
+      'SELECT * FROM recordings WHERE id = ?',
+      [id]
+    );
+
+    if (!recording) {
+      return res.status(404).json({ error: 'Recording not found' });
+    }
+
+    // Generate new S3 upload URL
+    const { uploadUrl } = await generateTranscriptUploadUrl(
+      recording.user_id,
+      recording.participant_id.toString(),
+      id
+    );
+
+    // Upload updated transcript to S3
+    await fetch(uploadUrl, {
+      method: 'PUT',
+      body: JSON.stringify({
+        text,
+        metadata,
+        recordingId: id,
+        timestamp: new Date().toISOString(),
+        editedByAdmin: true
+      }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // Update preview in database
+    const previewText = text.slice(0, 500) + (text.length > 500 ? '...' : '');
+    await dbAsync.run(
+      `UPDATE transcripts 
+       SET preview_text = ?,
+           status = 'completed',
+           created_at = CURRENT_TIMESTAMP
+       WHERE recording_id = ?`,
+      [previewText, id]
+    );
+
+    res.json({ message: 'Transcript updated' });
+  } catch (error) {
+    console.error('Error updating transcript:', error);
+    res.status(500).json({ error: 'Error updating transcript' });
+  }
+});
+
+// Admin team management
+app.get('/api/admin/team', checkJwt, isAdmin, (req: Request, res: Response) => {
+  // If we got here, user is an admin
+  res.json({ isAdmin: true });
+});
+
+app.post('/api/admin/team', checkJwt, isAdmin, async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    await dbAsync.run('INSERT INTO admin_team (email) VALUES (?)', [email]);
+    res.json({ message: 'Admin added successfully' });
+  } catch (error) {
+    console.error('Error adding admin:', error);
+    res.status(500).json({ error: 'Error adding admin' });
+  }
+});
+
+app.get('/api/admin/transcripts/:id/read-url', checkJwt, isAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Get the transcript record to find the S3 URL
+    const transcript = await dbAsync.get(
+      `SELECT t.s3_url, r.user_id 
+       FROM transcripts t
+       JOIN recordings r ON t.recording_id = r.id
+       WHERE r.id = ?`,
+      [id]
+    );
+
+    if (!transcript?.s3_url) {
+      return res.status(404).json({ error: 'Transcript not found or no S3 URL available' });
+    }
+
+    const readUrl = await generateTranscriptReadUrl(transcript.s3_url);
+    
+    res.json({ readUrl });
+  } catch (error) {
+    console.error('Error generating read URL:', error);
+    res.status(500).json({ error: 'Failed to generate read URL' });
+  }
+});
+
+app.get('/api/admin/recordings/:id/audio-url', checkJwt, isAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    // Get recording details from database
+    const recording = await dbAsync.get(
+      'SELECT s3_url FROM recordings WHERE id = ?',
+      [id]
+    );
+
+    if (!recording?.s3_url) {
+      return res.status(404).json({ error: 'Recording not found' });
+    }
+
+    // Create S3 client
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION!,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+      }
+    });
+
+    // Generate presigned URL
+    const command = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME!,
+      Key: recording.s3_url
+    });
+
+    const audioUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+    
+    res.json({ audioUrl });
+  } catch (error) {
+    console.error('Error generating audio URL:', error);
+    res.status(500).json({ error: 'Failed to generate audio URL' });
+  }
 });
 
 export default app;

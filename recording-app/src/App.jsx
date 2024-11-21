@@ -1,10 +1,24 @@
-import { useState, useRef } from 'react'
-import { Mic, StopCircle, User, LogOut, Play, Square, Upload } from 'lucide-react'
+import { useState, useRef, useEffect } from 'react'
+import { 
+  Mic, 
+  StopCircle, 
+  User, 
+  LogOut, 
+  Play, 
+  Square, 
+  Upload, 
+  Settings,  // Added this import
+  Cog  // Alternative icon if you prefer
+} from 'lucide-react'
 import { useAuth0 } from '@auth0/auth0-react'
+import AdminDashboard from './components/AdminDashboard'
+import AudioPlayer from './components/AudioPlayer'
 import './index.css'
 
 function App() {
   const [isRecording, setIsRecording] = useState(false)
+  const [isAdminView, setIsAdminView] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [mediaRecorder, setMediaRecorder] = useState(null)
   const [selectedParticipant, setSelectedParticipant] = useState('')
   const [uploadStatus, setUploadStatus] = useState(null) // 'uploading' | 'success' | 'error' | null
@@ -17,6 +31,42 @@ function App() {
     { id: '3', name: 'Participant C' },
   ])
   const { isAuthenticated, loginWithRedirect, logout, user, isLoading, getAccessTokenSilently } = useAuth0()
+
+  // Check if user is admin when they log in
+  useEffect(() => {
+    console.log('Auth effect running, user:', user);
+    if (user?.email) {
+      console.log('Checking admin status for:', user.email);
+      checkAdminStatus();
+    }
+  }, [user]);
+
+  const checkAdminStatus = async () => {
+    try {
+      const token = await getAccessTokenSilently();
+      console.log('Got token, checking admin status...');
+      
+      const response = await fetch('/api/admin/team', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      console.log('Admin check response:', response.status);
+      
+      if (response.ok) {
+        console.log('User is admin!');
+        setIsAdmin(true);
+      } else {
+        console.log('User is not admin');
+        setIsAdmin(false);
+      }
+    } catch (error) {
+      console.error('Admin check error:', error);
+      setIsAdmin(false);
+    }
+  };
+
   const audioChunks = useRef([])
   const currentBlob = useRef(null)
 
@@ -183,6 +233,10 @@ function App() {
       await uploadToS3(currentBlob.current)
     }
   }
+
+  if (isAuthenticated && isAdmin && isAdminView) {
+    return <AdminDashboard onExit={() => setIsAdminView(false)} />;
+  }
   
   if (isLoading) {
     return (
@@ -218,14 +272,31 @@ function App() {
           <div className="flex items-center gap-2">
             <User className="h-6 w-6 text-gray-400" />
             <span className="font-medium">{user?.name}</span>
+            {isAuthenticated && (
+              <div className="text-xs text-gray-500 mt-2">
+                Logged in as: {user?.email} 
+                Admin status: {isAdmin ? 'Yes' : 'No'}
+              </div>
+            )}
           </div>
-          <button
-            onClick={() => logout({ returnTo: window.location.origin })}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-          >
-            <LogOut className="h-5 w-5" />
-            Log Out
-          </button>
+          <div className="flex items-center gap-4">
+            {isAdmin && (
+              <button
+                onClick={() => setIsAdminView(!isAdminView)}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+              >
+                <Settings className="h-5 w-5" />
+                {isAdminView ? 'Exit Admin' : 'Admin Panel'}
+              </button>
+            )}
+            <button
+              onClick={() => logout({ returnTo: window.location.origin })}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+            >
+              <LogOut className="h-5 w-5" />
+              Log Out
+            </button>
+          </div>
         </div>
       </header>
 

@@ -5,8 +5,14 @@ interface ColumnInfo {
     count: number;
   }
 
+// Add production database path
+const dbPath = process.env.NODE_ENV === 'production' 
+  ? '/data/recordings.db'  // Persistent storage path on Railway/Render
+  : './recordings.db';
+
+
 // Create a new database instance
-const db = new sqlite3.Database('recordings.db', (err) => {
+const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database:', err);
   } else {
@@ -138,6 +144,41 @@ function createTables() {
           }
         );
       };
+
+       // Admin team table - simple list of admin emails
+    db.run(`
+        CREATE TABLE IF NOT EXISTS admin_team (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          email TEXT UNIQUE NOT NULL,
+          added_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+  
+      // Add a default admin if table is empty
+      db.get(
+        'SELECT COUNT(*) as count FROM admin_team',
+        [],
+        (err, row: { count: number }) => {
+          if (err) {
+            console.error('Error checking admin_team:', err);
+            return;
+          }
+          
+          if (row.count === 0 && process.env.INITIAL_ADMIN_EMAIL) {
+            db.run(
+              'INSERT INTO admin_team (email) VALUES (?)',
+              [process.env.INITIAL_ADMIN_EMAIL],
+              (err) => {
+                if (err) {
+                  console.error('Error adding initial admin:', err);
+                } else {
+                  console.log('Added initial admin:', process.env.INITIAL_ADMIN_EMAIL);
+                }
+              }
+            );
+          }
+        }
+      );
   
       // Add new columns with correct syntax
       addColumnIfNotExists('s3_url', 'TEXT');
