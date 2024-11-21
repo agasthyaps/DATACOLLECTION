@@ -305,7 +305,7 @@ function App() {
             type="text"
             value={selectedParticipant}
             onChange={(e) => setSelectedParticipant(e.target.value)}
-            placeholder="Enter teacher identifier (who are you talking to right now?)"
+            placeholder="Optional: teacher identifier (who are you talking to right now?)"
             className="w-full p-2 mb-6 border rounded-md"
             disabled={isRecording || uploadStatus === 'uploading'}
           />
@@ -313,12 +313,12 @@ function App() {
           {!audioUrl && (
             <button
               onClick={isRecording ? stopRecording : startRecording}
-              disabled={!selectedParticipant || uploadStatus === 'uploading'}
+              disabled={uploadStatus === 'uploading'}
               className={`w-full h-32 rounded-full flex items-center justify-center ${
                 isRecording 
                   ? 'bg-red-600 hover:bg-red-700' 
                   : 'bg-blue-600 hover:bg-blue-700'
-              } ${(!selectedParticipant || uploadStatus === 'uploading') && 'opacity-50 cursor-not-allowed'}`}
+              } ${(uploadStatus === 'uploading') && 'opacity-50 cursor-not-allowed'}`}
             >
               {isRecording ? (
                 <StopCircle className="h-16 w-16 text-white" />
