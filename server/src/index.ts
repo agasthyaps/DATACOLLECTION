@@ -58,7 +58,7 @@ for (const envVar of requiredEnvVars) {
 const app = express();
 
 const allowedOrigins = [
-  'https://tl-datacollection.vercel.app',  // Production frontend
+  'https://datacollection-xi.vercel.app',  // Production frontend
   'http://localhost:5173',                 // Development frontend
 ];
 
@@ -80,6 +80,8 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+app.options('*', cors(corsOptions));
 
 // Auth0 middleware configuration
 const checkJwt = auth({
