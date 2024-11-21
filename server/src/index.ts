@@ -59,7 +59,7 @@ const app = express();
 
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://datacollection-xi.vercel.app', 'http://localhost:5173'] 
+    ? ['https://datacollection-xi.vercel.app']
     : 'http://localhost:5173',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
