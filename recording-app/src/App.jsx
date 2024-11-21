@@ -78,11 +78,8 @@ function App() {
       
       // 1. Get presigned URL
       const requestUrl = '/api/recordings/upload-url'
-      // set selectedParticipant to 'anonymous' if empty
-      if (!selectedParticipant) {
-        setSelectedParticipant('anonymous')
-      }
-      const requestBody = { participantId: selectedParticipant }
+      // selectedParticipant = 'anonymous' if empty
+      const requestBody = { participantId: selectedParticipant || 'anonymous' }
       
       console.log('Making request to:', requestUrl)
       console.log('Request payload:', requestBody)
