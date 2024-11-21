@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import { X, Save, AlertCircle, Edit2, Loader } from 'lucide-react';
+import { apiRequest } from '../utils/api';
 
 function TranscriptModal({ transcript, onClose, onUpdate }) {
   const [transcriptData, setTranscriptData] = useState(null);
@@ -19,7 +20,7 @@ function TranscriptModal({ transcript, onClose, onUpdate }) {
       setError(null);
       
       const token = await getAccessTokenSilently();
-      const response = await fetch(`/api/admin/transcripts/${transcript.id}/retry`, {
+      const response = await apiRequest(`/api/admin/transcripts/${transcript.id}/retry`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`
@@ -56,7 +57,7 @@ function TranscriptModal({ transcript, onClose, onUpdate }) {
       const token = await getAccessTokenSilently();
       
       console.log('Fetching read URL for transcript:', transcript.id);
-      const urlResponse = await fetch(`/api/admin/transcripts/${transcript.id}/read-url`, {
+      const urlResponse = await apiRequest(`/api/admin/transcripts/${transcript.id}/read-url`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -105,7 +106,7 @@ function TranscriptModal({ transcript, onClose, onUpdate }) {
         editedByAdmin: true
       };
 
-      const response = await fetch(`/api/admin/transcripts/${transcript.id}`, {
+      const response = await apiRequest(`/api/admin/transcripts/${transcript.id}`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,

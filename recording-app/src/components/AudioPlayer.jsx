@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, X, Volume2, VolumeX } from 'lucide-react';
 import { useAuth0 } from '@auth0/auth0-react';
+import { apiRequest } from '../utils/api';
+
 
 const AudioPlayer = ({ recordingId, onClose }) => {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -23,7 +25,7 @@ const AudioPlayer = ({ recordingId, onClose }) => {
       const token = await getAccessTokenSilently();
       
       // Get presigned URL for audio file
-      const response = await fetch(`/api/admin/recordings/${recordingId}/audio-url`, {
+      const response = await apiRequest(`/api/admin/recordings/${recordingId}/audio-url`, {
         headers: {
           Authorization: `Bearer ${token}`
         }

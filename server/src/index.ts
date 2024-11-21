@@ -360,7 +360,7 @@ app.get('/api/admin/recordings', checkJwt, isAdmin, async (req: Request, res: Re
         r.recorded_at,
         r.status as recording_status,
         r.s3_url,
-        r.user_id,          -- This is the auth0_id
+        r.user_id,
         p.identifier as participant_identifier,
         t.status as transcript_status,
         t.preview_text,
