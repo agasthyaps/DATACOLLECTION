@@ -78,6 +78,10 @@ function App() {
       
       // 1. Get presigned URL
       const requestUrl = '/api/recordings/upload-url'
+      // set selectedParticipant to 'anonymous' if empty
+      if (!selectedParticipant) {
+        setSelectedParticipant('anonymous')
+      }
       const requestBody = { participantId: selectedParticipant }
       
       console.log('Making request to:', requestUrl)
@@ -227,10 +231,6 @@ function App() {
 
   const handleSubmit = async () => {
     if (currentBlob.current) {
-      const participantId = selectedParticipant.trim() || 'anonymous';
-    
-      const requestBody = { participantId };
-  
       await uploadToS3(currentBlob.current)
     }
   }
