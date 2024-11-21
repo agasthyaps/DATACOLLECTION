@@ -305,7 +305,7 @@ function App() {
             type="text"
             value={selectedParticipant}
             onChange={(e) => setSelectedParticipant(e.target.value)}
-            placeholder="Enter teacher identifier"
+            placeholder="Enter teacher identifier (who are you talking to right now?)"
             className="w-full p-2 mb-6 border rounded-md"
             disabled={isRecording || uploadStatus === 'uploading'}
           />
