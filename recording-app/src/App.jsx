@@ -227,6 +227,10 @@ function App() {
 
   const handleSubmit = async () => {
     if (currentBlob.current) {
+      const participantId = selectedParticipant.trim() || 'anonymous';
+    
+      const requestBody = { participantId };
+  
       await uploadToS3(currentBlob.current)
     }
   }
