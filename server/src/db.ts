@@ -7,8 +7,8 @@ interface ColumnInfo {
 
 // Add production database path
 const dbPath = process.env.NODE_ENV === 'production' 
-  ? '/data/recordings.db'  // Persistent storage path on Railway/Render
-  : './recordings.db';
+  ? '/data/recordings.db'
+  : 'recordings.db';
 
 
 // Create a new database instance

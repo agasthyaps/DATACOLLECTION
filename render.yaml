@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: recording-app-backend
+    env: node
+    buildCommand: cd server && npm install && npm run build
+    startCommand: cd server && node dist/index.js
+    disk:
+      name: sqlite-data
+      mountPath: /data
+      sizeGB: 1
