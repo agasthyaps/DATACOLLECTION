@@ -254,7 +254,7 @@ function App() {
         <main className="container mx-auto max-w-2xl px-4 py-8">
           <div className="rounded-lg bg-white p-6 shadow-lg text-center">
             <User className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <h1 className="text-2xl font-bold mb-6">Welcome to Recording App</h1>
+            <h1 className="text-2xl font-bold mb-6">TL Data Collection Prototype 🧪</h1>
             <button
               onClick={() => loginWithRedirect()}
               className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
@@ -304,7 +304,7 @@ function App() {
 
       <main className="container mx-auto max-w-2xl px-4 py-8">
         <div className="rounded-lg bg-white p-6 shadow-lg">
-          <h1 className="text-2xl font-bold text-center mb-6">Record Interview</h1>
+          <h1 className="text-2xl font-bold text-center mb-6">Record Coaching Conversation</h1>
           
           <select
             value={selectedParticipant}
@@ -312,7 +312,7 @@ function App() {
             className="w-full p-2 mb-6 border rounded-md"
             disabled={isRecording || uploadStatus === 'uploading'}
           >
-            <option value="">Select Participant</option>
+            <option value="">Select Teacher</option>
             {participants.map(participant => (
               <option key={participant.id} value={participant.id}>
                 {participant.name}

@@ -5,6 +5,8 @@ import { ArrowLeft, Play, FileText, AlertCircle, CheckCircle, Clock, RefreshCcw 
 import AudioPlayer from './AudioPlayer';
 import TranscriptModal from './TranscriptModal'
 import { apiRequest } from '../utils/api';
+import AdminManagement from './AdminManagement';
+
 
 
 
@@ -15,6 +17,8 @@ function AdminDashboard({ onExit }) {
   const { getAccessTokenSilently } = useAuth0();
   const [selectedRecording, setSelectedRecording] = useState(null);
   const [selectedTranscript, setSelectedTranscript] = useState(null);
+  const [showAdminManagement, setShowAdminManagement] = useState(false);
+
 
   const handleTranscriptUpdate = async () => {
     // Refresh the recordings list to get updated transcript status
@@ -68,6 +72,13 @@ function AdminDashboard({ onExit }) {
   return (
     <div className="min-h-screen bg-gray-100 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <button
+            onClick={() => setShowAdminManagement(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+            >
+            <UserPlus className="w-4 h-4 mr-2" />
+            Manage Admins
+        </button>
         <div className="mb-6">
           <button
             onClick={onExit}
@@ -213,6 +224,9 @@ function AdminDashboard({ onExit }) {
             recordingId={selectedRecording}
             onClose={() => setSelectedRecording(null)}
             />
+        )}
+        {showAdminManagement && (
+            <AdminManagement onClose={() => setShowAdminManagement(false)} />
         )}
       </div>
     </div>

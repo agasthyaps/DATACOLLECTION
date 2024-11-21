@@ -563,4 +563,79 @@ app.get('/api/admin/recordings/:id/audio-url', checkJwt, isAdmin, async (req: Re
   }
 });
 
+// Check if user is superadmin
+async function isSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  try {
+    const userInfo = await fetch(`${process.env.AUTH0_ISSUER}userinfo`, {
+      headers: {
+        'Authorization': req.headers.authorization || ''
+      }
+    }).then(r => r.json());
+
+    if (userInfo.email === 'aps@actually-useful.xyz') {
+      next();
+    } else {
+      res.status(403).json({ error: 'Not a superadmin' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+}
+
+// Sync database with S3
+app.post('/api/admin/sync-database', checkJwt, isSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION!,
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+      }
+    });
+
+    // List all objects in the recordings folder
+    const command = new ListObjectsV2Command({
+      Bucket: process.env.S3_BUCKET_NAME!,
+      Prefix: 'recordings/'
+    });
+
+    const s3Objects = await s3Client.send(command);
+    let addedCount = 0;
+
+    for (const obj of s3Objects.Contents || []) {
+      // Parse user_id and participant_id from the path
+      const parts = obj.Key?.split('/');
+      if (parts && parts.length >= 4) {
+        const userId = parts[1];
+        const participantId = parts[2];
+        
+        // Check if recording exists in database
+        const existing = await dbAsync.get(
+          'SELECT id FROM recordings WHERE s3_url = ?',
+          [obj.Key]
+        );
+
+        if (!existing) {
+          // Add new recording
+          await dbAsync.run(
+            `INSERT INTO recordings (user_id, participant_id, s3_url, status, recorded_at)
+             VALUES (?, ?, ?, 'uploaded', ?)`,
+            [userId, participantId, obj.Key, obj.LastModified]
+          );
+          addedCount++;
+        }
+      }
+    }
+
+    res.json({ 
+      success: true, 
+      addedCount,
+      message: `Added ${addedCount} new recordings to database`
+    });
+  } catch (error) {
+    console.error('Error syncing database:', error);
+    res.status(500).json({ error: 'Failed to sync database' });
+  }
+});
+
 export default app;
