@@ -9,7 +9,7 @@ import { db, dbAsync } from './db';
 import { startTranscription } from './transcription';
 import { dot } from 'node:test/reporters';
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 
 
 dotenv.config();
@@ -599,30 +599,35 @@ app.post('/api/admin/sync-database', checkJwt, isSuperAdmin, async (req: Request
       Prefix: 'recordings/'
     });
 
-    const s3Objects = await s3Client.send(command);
+    const response = await s3Client.send(command);
     let addedCount = 0;
 
-    for (const obj of s3Objects.Contents || []) {
-      // Parse user_id and participant_id from the path
-      const parts = obj.Key?.split('/');
-      if (parts && parts.length >= 4) {
-        const userId = parts[1];
-        const participantId = parts[2];
-        
-        // Check if recording exists in database
-        const existing = await dbAsync.get(
-          'SELECT id FROM recordings WHERE s3_url = ?',
-          [obj.Key]
-        );
+    if (response.Contents) {  // Type-safe check
+      for (const obj of response.Contents) {
+        // Parse user_id and participant_id from the path
+        const key = obj.Key;
+        if (key) {  // Type-safe check
+          const parts = key.split('/');
+          if (parts && parts.length >= 4) {
+            const userId = parts[1];
+            const participantId = parts[2];
+            
+            // Check if recording exists in database
+            const existing = await dbAsync.get(
+              'SELECT id FROM recordings WHERE s3_url = ?',
+              [key]
+            );
 
-        if (!existing) {
-          // Add new recording
-          await dbAsync.run(
-            `INSERT INTO recordings (user_id, participant_id, s3_url, status, recorded_at)
-             VALUES (?, ?, ?, 'uploaded', ?)`,
-            [userId, participantId, obj.Key, obj.LastModified]
-          );
-          addedCount++;
+            if (!existing) {
+              // Add new recording
+              await dbAsync.run(
+                `INSERT INTO recordings (user_id, participant_id, s3_url, status, recorded_at)
+                 VALUES (?, ?, ?, 'uploaded', ?)`,
+                [userId, participantId, key, obj.LastModified ?? new Date()]
+              );
+              addedCount++;
+            }
+          }
         }
       }
     }
@@ -634,7 +639,10 @@ app.post('/api/admin/sync-database', checkJwt, isSuperAdmin, async (req: Request
     });
   } catch (error) {
     console.error('Error syncing database:', error);
-    res.status(500).json({ error: 'Failed to sync database' });
+    res.status(500).json({ 
+      error: 'Failed to sync database',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 
