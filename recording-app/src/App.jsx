@@ -14,6 +14,8 @@ import { useAuth0 } from '@auth0/auth0-react'
 import AdminDashboard from './components/AdminDashboard'
 import AudioPlayer from './components/AudioPlayer'
 import './index.css'
+import { apiRequest } from './utils/api';
+
 
 function App() {
   const [isRecording, setIsRecording] = useState(false)
@@ -46,7 +48,7 @@ function App() {
       const token = await getAccessTokenSilently();
       console.log('Got token, checking admin status...');
       
-      const response = await fetch('/api/admin/team', {
+      const response = await apiRequest('/api/admin/team', {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -90,7 +92,7 @@ function App() {
         'Authorization': `Bearer ${token.substring(0, 20)}...`
       })
   
-      const response = await fetch(requestUrl, {
+      const response = await apiRequest(requestUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -140,7 +142,7 @@ function App() {
       console.log('Marking recording as complete...')
       const completeUrl = `/api/recordings/${recordingId}/complete`
       
-      const completeResponse = await fetch(completeUrl, {
+      const completeResponse = await apiRequest(completeUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

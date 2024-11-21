@@ -4,6 +4,8 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { ArrowLeft, Play, FileText, AlertCircle, CheckCircle, Clock, RefreshCcw } from 'lucide-react';
 import AudioPlayer from './AudioPlayer';
 import TranscriptModal from './TranscriptModal'
+import { apiRequest } from '../utils/api';
+
 
 
 function AdminDashboard({ onExit }) {
@@ -30,7 +32,7 @@ function AdminDashboard({ onExit }) {
       setLoading(true);
       setError(null);
       const token = await getAccessTokenSilently();
-      const response = await fetch('/api/admin/recordings', {
+      const response = await apiRequest('/api/admin/recordings', {
         headers: {
           Authorization: `Bearer ${token}`
         }
