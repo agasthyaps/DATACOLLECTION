@@ -6,9 +6,12 @@ import { randomUUID } from 'crypto';
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
-  credentials: fromIni({ 
-    profile: 'tl_coachrec'
-  })
+  credentials: process.env.NODE_ENV === 'production' 
+    ? {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!
+      }
+    : fromIni({ profile: 'tl_coachrec' })
 });
 
 // Log safe configuration info
