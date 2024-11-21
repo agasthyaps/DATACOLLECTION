@@ -1,10 +1,17 @@
+# render.yaml - in your root directory
 services:
   - type: web
-    name: recording-app-backend
+    name: recording-app-api
     env: node
+    plan: free
     buildCommand: cd server && npm install && npm run build
     startCommand: cd server && node dist/index.js
     disk:
-      name: sqlite-data
+      name: data
       mountPath: /data
       sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
