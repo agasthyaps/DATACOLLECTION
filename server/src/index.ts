@@ -57,10 +57,23 @@ for (const envVar of requiredEnvVars) {
 
 const app = express();
 
+const allowedOrigins = [
+  'https://tl-datacollection.vercel.app',  // Production frontend
+  'http://localhost:5173',                 // Development frontend
+];
+
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://datacollection-xi.vercel.app']
-    : 'http://localhost:5173',
+  origin: function (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('Blocked origin:', origin); // This will help us debug
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
