@@ -78,3 +78,60 @@ export async function generateReadUrl(objectKey: string): Promise<string> {
     throw new Error(`Failed to generate read URL: ${error.message}`);
   }
 }
+
+export async function generateTranscriptUploadUrl(
+  userId: string,
+  participantId: string,
+  recordingId: string
+): Promise<{
+  uploadUrl: string;
+  objectKey: string;
+}> {
+  try {
+    const objectKey = `transcripts/${userId}/${participantId}/${recordingId}.json`;
+
+    const command = new PutObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME!,
+      Key: objectKey,
+      ContentType: 'application/json'
+    });
+
+    const uploadUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: 300 // 5 minutes
+    });
+
+    return {
+      uploadUrl,
+      objectKey
+    };
+  } catch (err) {
+    const error = err as Error;
+    console.error('Error generating transcript upload URL:', {
+      errorType: error.constructor.name,
+      message: error.message
+    });
+    throw new Error(`Failed to generate transcript upload URL: ${error.message}`);
+  }
+}
+
+export async function generateTranscriptReadUrl(objectKey: string): Promise<string> {
+  try {
+    const command = new GetObjectCommand({
+      Bucket: process.env.S3_BUCKET_NAME!,
+      Key: objectKey
+    });
+
+    const readUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: 3600 // 1 hour
+    });
+
+    return readUrl;
+  } catch (err) {
+    const error = err as Error;
+    console.error('Error generating transcript read URL:', {
+      errorType: error.constructor.name,
+      message: error.message
+    });
+    throw new Error(`Failed to generate transcript read URL: ${error.message}`);
+  }
+}

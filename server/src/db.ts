@@ -97,72 +97,70 @@ function createTables() {
       )
     `);
 
-    // Transcripts table with initial schema
+    // Updated transcripts table - base schema
     db.run(`
-      CREATE TABLE IF NOT EXISTS transcripts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        recording_id INTEGER NOT NULL,
-        content TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (recording_id) REFERENCES recordings(id)
-      )
-    `);
-
-    // Safe migrations for transcripts table
-    console.log('Running migrations for transcripts table...');
-    
-    // Add columns one at a time with proper error handling
-    const addColumnIfNotExists = (columnName: string, columnDef: string) => {
-      db.get<ColumnInfo>(
-        `SELECT COUNT(*) as count FROM pragma_table_info('transcripts') WHERE name = ?`,
-        [columnName],
-        (err, row) => {
-          if (err) {
-            console.error(`Error checking for column ${columnName}:`, err);
-            return;
+        CREATE TABLE IF NOT EXISTS transcripts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          recording_id INTEGER NOT NULL,
+          content TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          metadata JSON,
+          status TEXT DEFAULT 'pending',
+          confidence REAL,
+          speaker_count INTEGER,
+          FOREIGN KEY (recording_id) REFERENCES recordings(id)
+        )
+      `);
+  
+      // Fixed column additions
+      const addColumnIfNotExists = (columnName: string, columnDef: string) => {
+        db.get<{ count: number }>(
+          `SELECT COUNT(*) as count FROM pragma_table_info('transcripts') WHERE name = ?`,
+          [columnName],
+          (err, row) => {
+            if (err) {
+              console.error(`Error checking for column ${columnName}:`, err);
+              return;
+            }
+            
+            if (row && row.count === 0) {
+              // Fix: Properly escape column definition
+              db.run(`ALTER TABLE transcripts ADD COLUMN "${columnName}" ${columnDef}`, (err) => {
+                if (err) {
+                  console.error(`Error adding column ${columnName}:`, err);
+                } else {
+                  console.log(`Successfully added column: ${columnName}`);
+                }
+              });
+            } else {
+              console.log(`Column already exists: ${columnName}`);
+            }
           }
-          
-          if (row && row.count === 0) {
-            db.run(`ALTER TABLE transcripts ADD COLUMN ${columnDef}`, (err) => {
-              if (err) {
-                console.error(`Error adding column ${columnName}:`, err);
-              } else {
-                console.log(`Successfully added column: ${columnName}`);
-              }
-            });
+        );
+      };
+  
+      // Add new columns with correct syntax
+      addColumnIfNotExists('s3_url', 'TEXT');
+      addColumnIfNotExists('preview_text', 'TEXT');  // Fixed: removed 'TEXT' from name
+      addColumnIfNotExists('error_message', 'TEXT');  // Fixed: removed 'TEXT' from name
+      addColumnIfNotExists('retry_count', 'INTEGER DEFAULT 0');
+      
+      // For last_updated, we'll use created_at for now
+      // SQLite doesn't support CURRENT_TIMESTAMP as a default value in ALTER TABLE
+      // We'll handle the timestamp updates in our application logic
+      
+      // Log final table schema
+      db.all(
+        `SELECT * FROM pragma_table_info('transcripts');`,
+        [],
+        (err, rows) => {
+          if (err) {
+            console.error('Error checking transcript table schema:', err);
           } else {
-            console.log(`Column already exists: ${columnName}`);
+            console.log('Transcript table schema after migration:', rows);
           }
         }
       );
-    };
-
-    // Add each column if it doesn't exist
-    addColumnIfNotExists('metadata', 'metadata JSON');
-    addColumnIfNotExists('status', 'status TEXT DEFAULT "pending"');
-    addColumnIfNotExists('confidence', 'confidence REAL');
-    addColumnIfNotExists('speaker_count', 'speaker_count INTEGER');
-
-    // Log final table schema
-    interface TableInfo {
-      name: string;
-      type: string;
-      notnull: number;
-      dflt_value: string | null;
-      pk: number;
-    }
-
-    db.all<TableInfo>(
-      `SELECT * FROM pragma_table_info('transcripts');`,
-      [],
-      (err, rows) => {
-        if (err) {
-          console.error('Error checking transcript table schema:', err);
-        } else {
-          console.log('Transcript table schema after migration:', rows);
-        }
-      }
-    );
-  });
-}
+    });
+  }
 export { db, createTables };

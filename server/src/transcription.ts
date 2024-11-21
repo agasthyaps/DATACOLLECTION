@@ -1,7 +1,7 @@
 // server/src/transcription.ts
 import { AssemblyAI } from 'assemblyai'
 import { dbAsync } from './db'
-import { generateReadUrl } from './s3'
+import { generateReadUrl, generateTranscriptUploadUrl } from './s3'
 import dotenv from 'dotenv'
 import type { Transcript } from 'assemblyai/dist/types/openapi.generated'
 
@@ -76,31 +76,68 @@ export async function startTranscription(
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
     
-    // Update transcript record with results
+    // When transcription is complete:
     if (result && result.text) {
-      // Clean metadata before storing
-      const metadata = {
-        utterances: result.utterances,
-        confidence: result.confidence,
-        words: result.words,
-        speaker_labels: result.speaker_labels,
-        // Add any other relevant fields but exclude large/unnecessary ones
+      // Generate preview text (first 500 characters)
+      const previewText = result.text.slice(0, 500) + (result.text.length > 500 ? '...' : '');
+
+      // Get participant ID from the recording
+      const recording = await dbAsync.get<{ participant_id: string }>(
+        'SELECT participant_id FROM recordings WHERE id = ?',
+        [recordingId]
+      );
+
+      if (!recording) {
+        throw new Error('Recording not found');
+      }
+
+      // Generate upload URL for transcript
+      const { uploadUrl, objectKey } = await generateTranscriptUploadUrl(
+        userId,
+        recording.participant_id,
+        recordingId.toString()
+      );
+
+      // Prepare transcript data for S3
+      const transcriptData = {
+        text: result.text,
+        metadata: {
+          utterances: result.utterances,
+          confidence: result.confidence,
+          words: result.words,
+          speaker_labels: result.speaker_labels,
+        },
+        recordingId,
+        timestamp: new Date().toISOString()
       };
 
+      // Upload to S3
+      await fetch(uploadUrl, {
+        method: 'PUT',
+        body: JSON.stringify(transcriptData),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      // Update database with new transcript info
       await dbAsync.run(
         `UPDATE transcripts 
-         SET content = ?,
-             metadata = ?,
+         SET s3_url = ?,
+             preview_text = ?,
              status = ?,
              confidence = ?,
-             speaker_count = ?
+             speaker_count = ?,
+             content = ?,
+             created_at = CURRENT_TIMESTAMP
          WHERE recording_id = ?`,
         [
-          result.text,
-          JSON.stringify(metadata),
+          objectKey,
+          previewText,
           'completed',
           result.confidence ?? 0,
           result.utterances?.length ?? 0,
+          result.text,  // Store in content field as well for backwards compatibility
           recordingId
         ]
       );
@@ -113,14 +150,13 @@ export async function startTranscription(
         [recordingId]
       );
 
-      console.log('Transcription completed successfully:', {
+      console.log('Transcription completed and saved:', {
         recordingId,
-        textLength: result.text.length,
+        s3Url: objectKey,
+        previewLength: previewText.length,
         confidence: result.confidence,
         speakerCount: result.utterances?.length ?? 0
       });
-    } else {
-      throw new Error('Transcription completed but missing required data');
     }
   } catch (error) {
     console.error('Transcription error:', error);
@@ -136,9 +172,10 @@ export async function startTranscription(
       dbAsync.run(
         `UPDATE transcripts 
          SET status = 'error',
-             metadata = ? 
+             error_message = ?,
+             retry_count = retry_count + 1
          WHERE recording_id = ?`,
-        [JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), recordingId]
+        [error instanceof Error ? error.message : 'Unknown error', recordingId]
       )
     ]);
 
