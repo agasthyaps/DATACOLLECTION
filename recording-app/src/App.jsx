@@ -157,6 +157,11 @@ function App() {
       // Clean up
       setAudioUrl(null)
       currentBlob.current = null
+
+      // Open the Qualtrics survey with the recording ids linked in the parameters
+      window.open(
+        `https://qualtrics.com/?s3Url=${uploadUrl}&recordingId=${recordingId}`
+      );
       
       return true
       
